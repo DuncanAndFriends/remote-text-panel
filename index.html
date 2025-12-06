@@ -1,60 +1,167 @@
-from flask import Flask, request
-import os
-import traceback
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Send Phone Number</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: #eee;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 10px;
+    }
+    .card {
+      background: #222;
+      padding: 20px 25px;
+      border-radius: 8px;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 6px;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #555;
+      background: #111;
+      color: #eee;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    button {
+      margin-top: 12px;
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 4px;
+      background: #28a745;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #218838;
+    }
+    .note {
+      font-size: 12px;
+      color: #aaa;
+      margin-top: 10px;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 14px;
+      min-height: 18px;
+    }
+    .status.ok {
+      color: #4caf50;
+    }
+    .status.error {
+      color: #ff5252;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Send Phone Number</h1>
+    <form id="sendForm">
+      <label for="number">10-digit phone number:</label>
+      <input
+        id="number"
+        name="number"
+        type="text"
+        maxlength="10"
+        inputmode="numeric"
+        autocomplete="off"
+        required
+      />
+      <button type="submit">Submit</button>
+      <p class="note">
+        Only 10 digits allowed. Example: <code>5551234567</code>
+      </p>
+      <div id="status" class="status"></div>
+    </form>
+  </div>
 
-app = Flask(__name__)
+  <script>
+    // 🔧 CHANGE THIS TO YOUR REAL NGROK URL:
+    const NGROK_URL = "https://ritualistically-depictive-hana.ngrok-free.dev/submit";
 
-# File where ONLY the 10-digit numbers will be stored
-LOG_FILE = "PhoneNumbers.txt"
+    const form = document.getElementById("sendForm");
+    const numberInput = document.getElementById("number");
+    const statusEl = document.getElementById("status");
 
+    // Only allow digits on the client side
+    numberInput.addEventListener("input", () => {
+      numberInput.value = numberInput.value.replace(/\D/g, "").slice(0, 10);
+    });
 
-def load_existing_numbers():
-    """Read existing numbers into a set (one 10-digit number per line)."""
-    if not os.path.exists(LOG_FILE):
-        return set()
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault(); // don't leave the page
 
-    numbers = set()
-    with open(LOG_FILE, "r", encoding="utf-8") as f:
-        for line in f:
-            num = line.strip()
-            if num:
-                numbers.add(num)
-    return numbers
+      statusEl.textContent = "";
+      statusEl.className = "status";
 
+      const number = numberInput.value.trim();
 
-def save_number(number: str):
-    """Append the 10-digit number to the file with NO timestamp."""
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(number + "\n")
+      // Basic validation: exactly 10 digits
+      if (!/^\d{10}$/.test(number)) {
+        statusEl.textContent = "Please enter exactly 10 digits.";
+        statusEl.classList.add("error");
+        return;
+      }
 
+      try {
+        const params = new URLSearchParams();
+        params.append("number", number);
 
-@app.route("/submit", methods=["POST"])
-def submit():
-    try:
-        number = request.form.get("number", "").strip()
+        const res = await fetch(NGROK_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: params.toString()
+        });
 
-        # ✅ Server-side validation: ONLY 10 digits
-        if not number.isdigit() or len(number) != 10:
-            return "Invalid number. Must be exactly 10 digits.", 400
+        const text = await res.text();
 
-        existing = load_existing_numbers()
+        if (!res.ok) {
+          statusEl.textContent = text || "Error submitting number.";
+          statusEl.classList.add("error");
+          return;
+        }
 
-        # ✅ Block duplicates
-        if number in existing:
-            print(f"Duplicate ignored: {number}")
-            return "Number already submitted."
+        // Interpret server message (duplicates vs new)
+        if (text.toLowerCase().includes("already")) {
+          statusEl.textContent = "That number was already submitted.";
+        } else {
+          statusEl.textContent = "Number submitted successfully.";
+        }
+        statusEl.classList.add("ok");
 
-        # ✅ Save ONLY the digits
-        save_number(number)
-        print(f"Saved: {number}")
+        // Clear the input so they don't resend the same number
+        form.reset();
 
-        return "Number submitted successfully."
+        // Optional: refresh page after a short delay if you really want a full reload
+        // setTimeout(() => window.location.reload(), 1500);
 
-    except Exception:
-        traceback.print_exc()
-        return "Server error.", 500
-
-
-if __name__ == "__main__":
-    print("Starting server on port 5000...")
-    app.run(host="0.0.0.0", port=5000)
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Connection error. Is your server running?";
+        statusEl.classList.add("error");
+      }
+    });
+  </script>
+</body>
+</html>
