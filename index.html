@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Remote Dialer</title>
+  <title>Remote Call Control</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -55,6 +55,12 @@
     button:hover {
       background: #218838;
     }
+    .end-btn {
+      background: #d32f2f;
+    }
+    .end-btn:hover {
+      background: #c62828;
+    }
     .note {
       font-size: 12px;
       color: #aaa;
@@ -70,30 +76,6 @@
     }
     .status.error {
       color: #ff5252;
-    }
-
-    .keypad {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      grid-gap: 10px;
-      margin-top: 10px;
-    }
-    .keypad button {
-      width: 100%;
-      padding: 15px 0;
-      font-size: 18px;
-      background: #333;
-    }
-    .keypad button:hover {
-      background: #444;
-    }
-    .end-call {
-      width: 100%;
-      margin-top: 15px;
-      background: #d32f2f;
-    }
-    .end-call:hover {
-      background: #c62828;
     }
   </style>
 </head>
@@ -115,53 +97,44 @@
       />
       <button type="submit">Submit Number</button>
       <p class="note">
-        Only 10 digits allowed. Duplicates are ignored.
+        Only 10 digits allowed. Duplicate numbers are ignored.
       </p>
       <div id="status" class="status"></div>
     </form>
   </div>
 
-  <!-- REMOTE KEYPAD -->
+  <!-- END-CALL VOTE -->
   <div class="card">
-    <h2>Remote Keypad</h2>
-    <div class="keypad" id="keypad">
-      <button data-key="1">1</button>
-      <button data-key="2">2</button>
-      <button data-key="3">3</button>
-      <button data-key="4">4</button>
-      <button data-key="5">5</button>
-      <button data-key="6">6</button>
-      <button data-key="7">7</button>
-      <button data-key="8">8</button>
-      <button data-key="9">9</button>
-      <button data-key="*">*</button>
-      <button data-key="0">0</button>
-      <button data-key="#">#</button>
-    </div>
-    <button class="end-call" id="endCallBtn">End Call (3-Vote)</button>
-    <div id="padStatus" class="status"></div>
+    <h2>End Call Vote</h2>
+    <p class="note">
+      When 3 unique IPs press this button, the app will send ESC to the softphone to end the call.
+    </p>
+    <button class="end-btn" id="endCallBtn">Vote to End Call</button>
+    <div id="endStatus" class="status"></div>
   </div>
 
   <script>
-    // ✅ YOUR NGROK URL IS NOW LOCKED IN
-    const NGROK_BASE = "https://ritualistically-depictive-hana.ngrok-free.dev/submit";
+    // 🔧 Change this if ngrok gives you a new URL:
+    const NGROK_BASE = "https://ritualistically-depictive-hana.ngrok-free.dev";
     const SUBMIT_URL = NGROK_BASE + "/submit";
     const PAD_URL    = NGROK_BASE + "/pad";
 
-    const form = document.getElementById("sendForm");
+    const form        = document.getElementById("sendForm");
     const numberInput = document.getElementById("number");
-    const statusEl = document.getElementById("status");
+    const statusEl    = document.getElementById("status");
 
-    const keypad = document.getElementById("keypad");
-    const padStatusEl = document.getElementById("padStatus");
-    const endCallBtn = document.getElementById("endCallBtn");
+    const endCallBtn  = document.getElementById("endCallBtn");
+    const endStatusEl = document.getElementById("endStatus");
 
+    // Only allow digits in the main number input
     numberInput.addEventListener("input", () => {
       numberInput.value = numberInput.value.replace(/\D/g, "").slice(0, 10);
     });
 
+    // Handle number submit
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
+
       statusEl.textContent = "";
       statusEl.className = "status";
 
@@ -184,49 +157,32 @@
 
         const text = await res.text();
 
-        if (text.toLowerCase().includes("already")) {
-          statusEl.textContent = "Duplicate ignored.";
-        } else {
-          statusEl.textContent = "Number submitted.";
+        if (!res.ok) {
+          statusEl.textContent = text || "Error submitting number.";
+          statusEl.classList.add("error");
+          return;
         }
 
+        if (text.toLowerCase().includes("already")) {
+          statusEl.textContent = "That number was already submitted.";
+        } else {
+          statusEl.textContent = "Number submitted successfully.";
+        }
         statusEl.classList.add("ok");
         form.reset();
 
-      } catch {
-        statusEl.textContent = "Connection error.";
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Connection error. Is your server running?";
         statusEl.classList.add("error");
       }
     });
 
-    keypad.addEventListener("click", async (e) => {
-      const btn = e.target.closest("button[data-key]");
-      if (!btn) return;
-
-      const key = btn.dataset.key;
-
-      try {
-        const params = new URLSearchParams();
-        params.append("action", "digit");
-        params.append("key", key);
-
-        const res = await fetch(PAD_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: params.toString()
-        });
-
-        const text = await res.text();
-        padStatusEl.textContent = text;
-        padStatusEl.className = "status ok";
-
-      } catch {
-        padStatusEl.textContent = "Pad offline.";
-        padStatusEl.className = "status error";
-      }
-    });
-
+    // Handle end-call vote
     endCallBtn.addEventListener("click", async () => {
+      endStatusEl.textContent = "";
+      endStatusEl.className = "status";
+
       try {
         const params = new URLSearchParams();
         params.append("action", "end");
@@ -238,12 +194,20 @@
         });
 
         const text = await res.text();
-        padStatusEl.textContent = text;
-        padStatusEl.className = "status ok";
 
-      } catch {
-        padStatusEl.textContent = "Pad offline.";
-        padStatusEl.className = "status error";
+        if (!res.ok) {
+          endStatusEl.textContent = text || "Error sending vote.";
+          endStatusEl.classList.add("error");
+          return;
+        }
+
+        endStatusEl.textContent = text;
+        endStatusEl.classList.add("ok");
+
+      } catch (err) {
+        console.error(err);
+        endStatusEl.textContent = "Connection error. Is your server running?";
+        endStatusEl.classList.add("error");
       }
     });
   </script>
