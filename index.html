@@ -95,8 +95,8 @@
   </div>
 
   <script>
-    // 🔧 CHANGE THIS TO YOUR REAL NGROK URL:
-    const NGROK_URL = "https://ritualistically-depictive-hana.ngrok-free.dev/submit";
+    // 🔧 PUT YOUR NGROK URL HERE:
+    const NGROK_URL = "https://ritualistically-depictive-hana.ngrok-free.dev/submit"; 
 
     const form = document.getElementById("sendForm");
     const numberInput = document.getElementById("number");
@@ -108,7 +108,7 @@
     });
 
     form.addEventListener("submit", async (e) => {
-      e.preventDefault(); // don't leave the page
+      e.preventDefault(); // stay on same page
 
       statusEl.textContent = "";
       statusEl.className = "status";
@@ -142,7 +142,6 @@
           return;
         }
 
-        // Interpret server message (duplicates vs new)
         if (text.toLowerCase().includes("already")) {
           statusEl.textContent = "That number was already submitted.";
         } else {
@@ -150,11 +149,8 @@
         }
         statusEl.classList.add("ok");
 
-        // Clear the input so they don't resend the same number
+        // Clear the box for the next number
         form.reset();
-
-        // Optional: refresh page after a short delay if you really want a full reload
-        // setTimeout(() => window.location.reload(), 1500);
 
       } catch (err) {
         console.error(err);
