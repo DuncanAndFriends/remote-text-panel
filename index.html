@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Send Phone Number</title>
+  <title>Remote Dialer</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -20,8 +20,9 @@
       max-width: 420px;
       width: 100%;
       box-shadow: 0 0 10px rgba(0,0,0,0.5);
+      margin-bottom: 30px;
     }
-    h1 {
+    h1, h2 {
       text-align: center;
       margin-bottom: 10px;
     }
@@ -41,8 +42,6 @@
       box-sizing: border-box;
     }
     button {
-      margin-top: 12px;
-      width: 100%;
       padding: 10px;
       border: none;
       border-radius: 4px;
@@ -70,9 +69,34 @@
     .status.error {
       color: #ff5252;
     }
+
+    .keypad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-gap: 10px;
+      margin-top: 10px;
+    }
+    .keypad button {
+      width: 100%;
+      padding: 15px 0;
+      font-size: 18px;
+      background: #333;
+    }
+    .keypad button:hover {
+      background: #444;
+    }
+    .end-call {
+      width: 100%;
+      margin-top: 15px;
+      background: #d32f2f;
+    }
+    .end-call:hover {
+      background: #c62828;
+    }
   </style>
 </head>
 <body>
+  <!-- Number submit / collector -->
   <div class="card">
     <h1>Send Phone Number</h1>
     <form id="sendForm">
@@ -86,36 +110,64 @@
         autocomplete="off"
         required
       />
-      <button type="submit">Submit</button>
+      <button type="submit" style="width: 100%; margin-top: 12px;">Submit Number</button>
       <p class="note">
-        Only 10 digits allowed. Example: <code>5551234567</code>
+        Only 10 digits allowed. Example: <code>5551234567</code><br>
+        Duplicate numbers are ignored.
       </p>
       <div id="status" class="status"></div>
     </form>
   </div>
 
+  <!-- Keypad remote control -->
+  <div class="card">
+    <h2>Remote Keypad</h2>
+    <div class="keypad" id="keypad">
+      <button data-key="1">1</button>
+      <button data-key="2">2</button>
+      <button data-key="3">3</button>
+      <button data-key="4">4</button>
+      <button data-key="5">5</button>
+      <button data-key="6">6</button>
+      <button data-key="7">7</button>
+      <button data-key="8">8</button>
+      <button data-key="9">9</button>
+      <button data-key="*">*</button>
+      <button data-key="0">0</button>
+      <button data-key="#">#</button>
+    </div>
+    <button class="end-call" id="endCallBtn">End Call (Vote)</button>
+    <div id="padStatus" class="status"></div>
+  </div>
+
   <script>
-    // 🔧 PUT YOUR NGROK URL HERE:
-    const NGROK_URL = "https://ritualistically-depictive-hana.ngrok-free.dev/submit"; 
+    // 🔧 CHANGE THIS BASE URL TO YOUR CURRENT NGROK URL (no /submit here)
+    const NGROK_BASE = "https://YOUR-NGROK-URL.ngrok-free.app";
+    const SUBMIT_URL = NGROK_BASE + "/submit";
+    const PAD_URL    = NGROK_BASE + "/pad";
 
     const form = document.getElementById("sendForm");
     const numberInput = document.getElementById("number");
     const statusEl = document.getElementById("status");
 
-    // Only allow digits on the client side
+    const keypad = document.getElementById("keypad");
+    const padStatusEl = document.getElementById("padStatus");
+    const endCallBtn = document.getElementById("endCallBtn");
+
+    // Only allow digits for main number input
     numberInput.addEventListener("input", () => {
       numberInput.value = numberInput.value.replace(/\D/g, "").slice(0, 10);
     });
 
+    // Handle number submit
     form.addEventListener("submit", async (e) => {
-      e.preventDefault(); // stay on same page
+      e.preventDefault();
 
       statusEl.textContent = "";
       statusEl.className = "status";
 
       const number = numberInput.value.trim();
 
-      // Basic validation: exactly 10 digits
       if (!/^\d{10}$/.test(number)) {
         statusEl.textContent = "Please enter exactly 10 digits.";
         statusEl.classList.add("error");
@@ -126,7 +178,7 @@
         const params = new URLSearchParams();
         params.append("number", number);
 
-        const res = await fetch(NGROK_URL, {
+        const res = await fetch(SUBMIT_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/x-www-form-urlencoded"
@@ -148,14 +200,88 @@
           statusEl.textContent = "Number submitted successfully.";
         }
         statusEl.classList.add("ok");
-
-        // Clear the box for the next number
         form.reset();
 
       } catch (err) {
         console.error(err);
         statusEl.textContent = "Connection error. Is your server running?";
         statusEl.classList.add("error");
+      }
+    });
+
+    // Handle keypad digit press
+    keypad.addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-key]");
+      if (!btn) return;
+
+      const key = btn.getAttribute("data-key");
+
+      padStatusEl.textContent = "";
+      padStatusEl.className = "status";
+
+      try {
+        const params = new URLSearchParams();
+        params.append("action", "digit");
+        params.append("key", key);
+
+        const res = await fetch(PAD_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: params.toString()
+        });
+
+        const text = await res.text();
+
+        if (!res.ok) {
+          padStatusEl.textContent = text || "Error sending key.";
+          padStatusEl.classList.add("error");
+          return;
+        }
+
+        padStatusEl.textContent = text;
+        padStatusEl.classList.add("ok");
+
+      } catch (err) {
+        console.error(err);
+        padStatusEl.textContent = "Connection error. Is your server running?";
+        padStatusEl.classList.add("error");
+      }
+    });
+
+    // Handle "End Call" vote
+    endCallBtn.addEventListener("click", async () => {
+      padStatusEl.textContent = "";
+      padStatusEl.className = "status";
+
+      try {
+        const params = new URLSearchParams();
+        params.append("action", "end");
+
+        const res = await fetch(PAD_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: params.toString()
+        });
+
+        const text = await res.text();
+
+        if (!res.ok) {
+          padStatusEl.textContent = text || "Error sending end vote.";
+          padStatusEl.classList.add("error");
+          return;
+        }
+
+        padStatusEl.textContent = text;
+        padStatusEl.classList.add("ok");
+
+      } catch (err) {
+        console.error(err);
+        padStatusEl.textContent = "Connection error. Is your server running?";
+        padStatusEl.classList.add("error");
       }
     });
   </script>
