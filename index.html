@@ -49,6 +49,8 @@
       color: white;
       font-size: 16px;
       cursor: pointer;
+      width: 100%;
+      margin-top: 10px;
     }
     button:hover {
       background: #218838;
@@ -96,7 +98,8 @@
   </style>
 </head>
 <body>
-  <!-- Number submit / collector -->
+
+  <!-- NUMBER SUBMIT -->
   <div class="card">
     <h1>Send Phone Number</h1>
     <form id="sendForm">
@@ -110,16 +113,15 @@
         autocomplete="off"
         required
       />
-      <button type="submit" style="width: 100%; margin-top: 12px;">Submit Number</button>
+      <button type="submit">Submit Number</button>
       <p class="note">
-        Only 10 digits allowed. Example: <code>5551234567</code><br>
-        Duplicate numbers are ignored.
+        Only 10 digits allowed. Duplicates are ignored.
       </p>
       <div id="status" class="status"></div>
     </form>
   </div>
 
-  <!-- Keypad remote control -->
+  <!-- REMOTE KEYPAD -->
   <div class="card">
     <h2>Remote Keypad</h2>
     <div class="keypad" id="keypad">
@@ -136,13 +138,13 @@
       <button data-key="0">0</button>
       <button data-key="#">#</button>
     </div>
-    <button class="end-call" id="endCallBtn">End Call (Vote)</button>
+    <button class="end-call" id="endCallBtn">End Call (3-Vote)</button>
     <div id="padStatus" class="status"></div>
   </div>
 
   <script>
-    // 🔧 CHANGE THIS BASE URL TO YOUR CURRENT NGROK URL (no /submit here)
-    const NGROK_BASE = "https://YOUR-NGROK-URL.ngrok-free.app";
+    // ✅ YOUR NGROK URL IS NOW LOCKED IN
+    const NGROK_BASE = "https://ritualistically-depictive-hana.ngrok-free.dev";
     const SUBMIT_URL = NGROK_BASE + "/submit";
     const PAD_URL    = NGROK_BASE + "/pad";
 
@@ -154,22 +156,18 @@
     const padStatusEl = document.getElementById("padStatus");
     const endCallBtn = document.getElementById("endCallBtn");
 
-    // Only allow digits for main number input
     numberInput.addEventListener("input", () => {
       numberInput.value = numberInput.value.replace(/\D/g, "").slice(0, 10);
     });
 
-    // Handle number submit
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
-
       statusEl.textContent = "";
       statusEl.className = "status";
 
       const number = numberInput.value.trim();
-
       if (!/^\d{10}$/.test(number)) {
-        statusEl.textContent = "Please enter exactly 10 digits.";
+        statusEl.textContent = "Enter exactly 10 digits.";
         statusEl.classList.add("error");
         return;
       }
@@ -180,44 +178,32 @@
 
         const res = await fetch(SUBMIT_URL, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded"
-          },
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: params.toString()
         });
 
         const text = await res.text();
 
-        if (!res.ok) {
-          statusEl.textContent = text || "Error submitting number.";
-          statusEl.classList.add("error");
-          return;
+        if (text.toLowerCase().includes("already")) {
+          statusEl.textContent = "Duplicate ignored.";
+        } else {
+          statusEl.textContent = "Number submitted.";
         }
 
-        if (text.toLowerCase().includes("already")) {
-          statusEl.textContent = "That number was already submitted.";
-        } else {
-          statusEl.textContent = "Number submitted successfully.";
-        }
         statusEl.classList.add("ok");
         form.reset();
 
-      } catch (err) {
-        console.error(err);
-        statusEl.textContent = "Connection error. Is your server running?";
+      } catch {
+        statusEl.textContent = "Connection error.";
         statusEl.classList.add("error");
       }
     });
 
-    // Handle keypad digit press
     keypad.addEventListener("click", async (e) => {
       const btn = e.target.closest("button[data-key]");
       if (!btn) return;
 
-      const key = btn.getAttribute("data-key");
-
-      padStatusEl.textContent = "";
-      padStatusEl.className = "status";
+      const key = btn.dataset.key;
 
       try {
         const params = new URLSearchParams();
@@ -226,62 +212,38 @@
 
         const res = await fetch(PAD_URL, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded"
-          },
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: params.toString()
         });
 
         const text = await res.text();
-
-        if (!res.ok) {
-          padStatusEl.textContent = text || "Error sending key.";
-          padStatusEl.classList.add("error");
-          return;
-        }
-
         padStatusEl.textContent = text;
-        padStatusEl.classList.add("ok");
+        padStatusEl.className = "status ok";
 
-      } catch (err) {
-        console.error(err);
-        padStatusEl.textContent = "Connection error. Is your server running?";
-        padStatusEl.classList.add("error");
+      } catch {
+        padStatusEl.textContent = "Pad offline.";
+        padStatusEl.className = "status error";
       }
     });
 
-    // Handle "End Call" vote
     endCallBtn.addEventListener("click", async () => {
-      padStatusEl.textContent = "";
-      padStatusEl.className = "status";
-
       try {
         const params = new URLSearchParams();
         params.append("action", "end");
 
         const res = await fetch(PAD_URL, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded"
-          },
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: params.toString()
         });
 
         const text = await res.text();
-
-        if (!res.ok) {
-          padStatusEl.textContent = text || "Error sending end vote.";
-          padStatusEl.classList.add("error");
-          return;
-        }
-
         padStatusEl.textContent = text;
-        padStatusEl.classList.add("ok");
+        padStatusEl.className = "status ok";
 
-      } catch (err) {
-        console.error(err);
-        padStatusEl.textContent = "Connection error. Is your server running?";
-        padStatusEl.classList.add("error");
+      } catch {
+        padStatusEl.textContent = "Pad offline.";
+        padStatusEl.className = "status error";
       }
     });
   </script>
